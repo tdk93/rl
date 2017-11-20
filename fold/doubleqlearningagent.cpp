@@ -169,8 +169,16 @@ int DoubleQLearningAgent::takeAction(const vector<double> &state){
   for(int a = 0; a < numActions; a++){
     for(int f = 0; f < numFeatures; f++){
 
-      if(isinf(weights[a][curQ][f]) || (weights[a][curQ][f] != weights[a][curQ][f])|isinf(weights[a][!curQ][f]) || (weights[a][!curQ][f] != weights[a][curQ][f])){
+      
+      if(isinf(weights[a][curQ][f]) || (weights[a][curQ][f] != weights[a][curQ][f]) || isinf(weights[a][!curQ][f]) || (weights[a][!curQ][f] != weights[a][!curQ][f])){
         diverged = true;
+        cout << isinf(weights[a][curQ][f]); 
+        cout << (weights[a][curQ][f] != weights[a][curQ][f]) ; cout << isinf(weights[a][!curQ][f]);  cout << (weights[a][!curQ][f] != weights[a][!curQ][f]);
+ 
+        if(true){
+          cout << "a is " << a << endl;
+          cout << "f is " << f << endl;
+        }
         cout << "Diverged\n";
       }
 
@@ -289,7 +297,7 @@ void DoubleQLearningAgent::update(const double &reward, const vector<double> &st
 
 
 
-  if(terminal){
+  else{
 
   double delta = lastReward - computeQ(lastState, lastAction,curQ);
 
