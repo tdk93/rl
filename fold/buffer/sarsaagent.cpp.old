@@ -1,0 +1,159 @@
+#include "sarsaagent.h"
+
+SarsaAgent::SarsaAgent(const int &numFeatures, const int &numActions, const int &randomSeed) : Agent(numFeatures, numActions, randomSeed){
+  
+  this->numFeatures = numFeatures;
+  this->numActions = numActions;
+
+  // Set all weights to 0 initially.
+  for(int a = 0; a < numActions; a++){
+
+    vector<double> w;
+    for(int f = 0; f <= numFeatures; f++){
+      w.push_back(0);
+    }
+
+    weights.push_back(w);
+  }
+
+  for(int f = 0; f <= numFeatures; f++){
+    lastState.push_back(0);
+  }
+  lastAction = -1;
+  lastReward = 0;
+
+  numEpisodesDone = 0;
+
+  // Initial values for alpha and epsilon, which are
+  // annealed harmonically in update() every 50,000
+  // episodes.
+  alpha = 0.1;
+  epsilon = 0.1;
+}
+
+SarsaAgent::~SarsaAgent(){
+  
+}
+
+
+double SarsaAgent::computeQ(const vector<double> &state, const int &action){
+
+  double v = 0;
+  
+  for(int f = 0; f < numFeatures; f++){
+    v += weights[action][f] * state[f];
+  }
+
+  // Bias.
+  v += weights[action][numFeatures];
+
+  return v;
+}
+
+int SarsaAgent::argMaxQ(const vector<double> &state){
+
+  int bestAction = 0;
+  double bestVal = computeQ(state, 0);
+
+  int numTies = 0;
+
+  for(int a = 1; a < numActions; a++){
+
+    double val = computeQ(state, a);
+    if(fabs(val - bestVal) < EPS){
+
+      numTies++;
+      if(gsl_rng_uniform(ran) < (1.0 / (1.0 + numTies))){
+	bestVal = val;
+	bestAction = a;
+      }
+    }
+    else if(val > bestVal){
+      bestVal = val;
+      bestAction = a;
+      numTies = 0;
+    }
+  }
+
+  return bestAction;
+}
+
+
+int SarsaAgent::takeAction(const vector<double> &state){
+
+  int action;
+
+  if(gsl_rng_uniform(ran) < epsilon){
+    action = (int)(gsl_rng_uniform(ran) * numActions) % numActions;
+  }
+  else{
+    action = argMaxQ(state);
+  }
+  
+  if(lastAction != -1){
+    
+    double delta = lastReward + computeQ(state, action) - computeQ(lastState, lastAction);
+
+    for(int f = 0; f < numFeatures; f++){
+      weights[lastAction][f] += alpha * delta * lastState[f];
+    }
+    weights[lastAction][numFeatures] += alpha * delta;
+  }
+
+  for(int i = 0; i < numFeatures; i++){
+    lastState[i] = state[i];
+  }
+
+  lastAction = action;
+
+  return action;
+}
+
+int SarsaAgent::takeBestAction(const vector<double> &state){
+
+  if(gsl_rng_uniform(ran) < epsilon){
+    return ((int)(gsl_rng_uniform(ran) * numActions) % numActions);
+  }
+  else{
+    return (argMaxQ(state));
+  }
+}
+
+
+void SarsaAgent::update(const double &reward, const vector<double> &state, const bool &terminal){
+
+  lastReward = reward;
+
+  if(terminal){
+
+    double delta = lastReward - computeQ(lastState, lastAction);
+
+    for(int f = 0; f < numFeatures; f++){
+      weights[lastAction][f] += alpha * delta * lastState[f];
+    }
+    weights[lastAction][numFeatures] += alpha * delta;
+
+    lastAction = -1;
+
+    numEpisodesDone++;
+
+    // Anneal alpha and epsilon.
+    alpha = 0.1 / ((numEpisodesDone / 50000.0) + 1.0);
+    epsilon = 0.1 / ((numEpisodesDone / 50000.0) + 1.0);
+  }
+
+}
+
+
+vector<double> SarsaAgent::getWeights(){
+
+  vector<double> w;
+  for(int a = 0; a < numActions; a++){
+    for(int f = 0; f <= numFeatures; f++){
+      w.push_back(weights[a][f]);
+    }
+  }
+
+  return w;
+}
+

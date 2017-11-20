@@ -1,0 +1,195 @@
+#include "sarsalambdaagent.h"
+
+SarsaLambdaAgent::SarsaLambdaAgent(const int &numFeatures, const int &numActions, const double &lambda, const int &randomSeed) : Agent(numFeatures, numActions, randomSeed){
+  
+  this->numFeatures = numFeatures;
+  this->numActions = numActions;
+
+  // Set all weights to 0 initially.
+  for(int a = 0; a < numActions; a++){
+
+    vector<double> w;
+    for(int f = 0; f <= numFeatures; f++){
+      w.push_back(0);
+    }
+
+    weights.push_back(w);
+  }
+
+  for(int f = 0; f <= numFeatures; f++){
+    lastState.push_back(0);
+  }
+  lastAction = -1;
+  lastReward = 0;
+
+  numEpisodesDone = 0;
+
+  this->lambda = lambda;
+
+  // Clear history trajectory.
+  resetTrajectory();
+
+  // Initial values for alpha and epsilon, which are
+  // annealed harmonically in update() every 50,000
+  // episodes.
+  alpha = 0.1;
+  epsilon = 0.1;
+}
+
+SarsaLambdaAgent::~SarsaLambdaAgent(){
+  
+}
+
+
+void SarsaLambdaAgent::resetTrajectory(){
+
+  stateTraj.clear();
+  actionTraj.clear();
+  eligibility.clear();
+}
+
+
+double SarsaLambdaAgent::computeQ(const vector<double> &state, const int &action){
+
+  double v = 0;
+  
+  for(int f = 0; f < numFeatures; f++){
+    v += weights[action][f] * state[f];
+  }
+
+  // Bias.
+  v += weights[action][numFeatures];
+
+  return v;
+}
+
+int SarsaLambdaAgent::argMaxQ(const vector<double> &state){
+
+  int bestAction = 0;
+  double bestVal = computeQ(state, 0);
+
+  int numTies = 0;
+
+  for(int a = 1; a < numActions; a++){
+
+    double val = computeQ(state, a);
+    if(fabs(val - bestVal) < EPS){
+
+      numTies++;
+      if(gsl_rng_uniform(ran) < (1.0 / (1.0 + numTies))){
+	bestVal = val;
+	bestAction = a;
+      }
+    }
+    else if(val > bestVal){
+      bestVal = val;
+      bestAction = a;
+      numTies = 0;
+    }
+  }
+
+  return bestAction;
+}
+
+
+int SarsaLambdaAgent::takeAction(const vector<double> &state){
+
+  int action;
+
+  if(gsl_rng_uniform(ran) < epsilon){
+    action = (int)(gsl_rng_uniform(ran) * numActions) % numActions;
+  }
+  else{
+    action = argMaxQ(state);
+  }
+  
+  if(lastAction != -1){
+    
+    double delta = lastReward + computeQ(state, action) - computeQ(lastState, lastAction);
+
+    stateTraj.push_back(lastState);
+    actionTraj.push_back(lastAction);
+    eligibility.push_back(1.0);
+    updateTrajectory(delta);
+
+  }
+
+  for(int i = 0; i < numFeatures; i++){
+    lastState[i] = state[i];
+  }
+
+  lastAction = action;
+
+  return action;
+}
+
+int SarsaLambdaAgent::takeBestAction(const vector<double> &state){
+
+  if(gsl_rng_uniform(ran) < epsilon){
+    return ((int)(gsl_rng_uniform(ran) * numActions) % numActions);
+  }
+  else{
+    return (argMaxQ(state));
+  }
+}
+
+
+void SarsaLambdaAgent::update(const double &reward, const vector<double> &state, const bool &terminal){
+
+  lastReward = reward;
+
+  if(terminal){
+
+    double delta = lastReward - computeQ(lastState, lastAction);
+
+    stateTraj.push_back(lastState);
+    actionTraj.push_back(lastAction);
+    eligibility.push_back(1.0);
+
+    updateTrajectory(delta);
+    resetTrajectory();
+
+    lastAction = -1;
+
+    numEpisodesDone++;
+
+
+    // Anneal alpha and epsilon.
+    alpha = 0.1 / ((numEpisodesDone / 50000.0) + 1.0);
+    epsilon = 0.1 / ((numEpisodesDone / 50000.0) + 1.0);
+  }
+
+}
+
+void SarsaLambdaAgent::updateTrajectory(const double &delta){
+
+  // Assume trajectory and eligibilities are already set.
+  for(unsigned int t = 0; t < stateTraj.size(); t++){
+
+    for(int f = 0; f < numFeatures; f++){
+      weights[actionTraj[t]][f] += alpha * delta * stateTraj[t][f] * eligibility[t];
+    }
+    weights[actionTraj[t]][numFeatures] += alpha * delta * eligibility[t];
+
+    //    if(gsl_rng_uniform(ran) < 0.0001){
+      //      cout << weights[actionTraj[t]][numFeatures] << "\n";
+    //    }
+
+    eligibility[t] *= lambda;
+  }
+
+}
+
+
+vector<double> SarsaLambdaAgent::getWeights(){
+
+  vector<double> w;
+  for(int a = 0; a < numActions; a++){
+    for(int f = 0; f <= numFeatures; f++){
+      w.push_back(weights[a][f]);
+    }
+  }
+
+  return w;
+}
+

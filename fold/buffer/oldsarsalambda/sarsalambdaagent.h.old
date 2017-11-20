@@ -1,0 +1,61 @@
+#ifndef SARSALAMBDAAGENT_H
+#define SARSALAMBDAAGENT_H
+
+#include <iostream>
+#include <vector>
+#include <math.h>
+
+#include "agent.h"
+
+using namespace std;
+
+
+class SarsaLambdaAgent : public Agent{
+
+ private:
+
+  int numFeatures;
+  int numActions;
+
+  int numEpisodesDone;
+
+  // Linear function approximator -- one for each action.
+  // Contains a bias term (the last one).
+  vector< vector<double> > weights;
+
+  vector<double> lastState;
+  int lastAction;
+  double lastReward;
+
+  double lambda;
+
+  double alpha, epsilon;
+
+  // Trajectory of states and actions, earliest first, along with current eligibilities.
+  vector< vector<double> > stateTraj;
+  vector<int> actionTraj;
+  vector<double> eligibility;
+
+  void resetTrajectory();
+
+  double computeQ(const vector<double> &state, const int &action);
+  int argMaxQ(const vector<double> &state);
+
+  void updateTrajectory(const double &delta);
+
+ public:
+
+  SarsaLambdaAgent(const int &numFeatures, const int &numActions, const double &lambda, const int &randomSeed);
+  ~SarsaLambdaAgent();
+
+  int takeAction(const vector<double> &state);
+  int takeBestAction(const vector<double> &state);
+  void update(const double &reward, const vector<double> &state, const bool &terminal);
+
+
+  vector<double> getWeights();
+
+};
+
+#endif 
+

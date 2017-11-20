@@ -1,0 +1,371 @@
+#include "greedygqlambdaagent.h"
+
+GreedyGQLambdaAgent::GreedyGQLambdaAgent(const int &numFeatures, const int &numActions, const double &lambda, const int &randomSeed) : Agent(numFeatures, numActions, randomSeed){
+  
+  this->numFeatures = numFeatures;
+  this->numActions = numActions;
+
+  // Set all weights to 0 initially.
+  w.clear();
+  theta.clear();
+  e.clear();
+  for(int a = 0; a < numActions; a++){
+
+    vector<double> ww;
+    vector<double> tt;
+    vector<double> ee;
+    for(int f = 0; f < numFeatures; f++){
+      ww.push_back(0);
+      tt.push_back(0);
+      ee.push_back(0);
+    }
+
+    w.push_back(ww);
+    theta.push_back(tt);
+    e.push_back(ee);
+  }
+
+  for(int f = 0; f < numFeatures; f++){
+    lastState.push_back(0);
+  }
+  lastAction = -1;
+  lastExplore = false;
+
+  lastReward = 0;
+
+  numEpisodesDone = 0;
+
+  this->lambda = lambda;
+
+  // Clear history trajectory.
+  resetEligibility();
+
+
+  // Initial values for alpha and epsilon, which are
+  // annealed harmonically in update() every 50,000
+  // episodes.
+
+
+  this->alphaInit = 0.2;
+  alpha = alphaInit;
+  epsilon = 0.1;
+
+  diverged = false;
+
+}
+
+GreedyGQLambdaAgent::~GreedyGQLambdaAgent(){
+  
+}
+
+
+void GreedyGQLambdaAgent::resetEligibility(){
+
+  e.resize(numActions);
+  for(int a = 0; a < numActions; a++){
+    e[a].resize(numFeatures);
+
+    for(int f = 0; f < numFeatures; f++){
+      e[a][f] = 0;
+    }
+  }
+}
+
+
+double GreedyGQLambdaAgent::computeQ(const vector<double> &state, const int &action){
+
+  double v = 0;
+  
+  for(int f = 0; f < numFeatures; f++){
+    v += theta[action][f] * state[f];
+  }
+
+  return v;
+}
+
+int GreedyGQLambdaAgent::argMaxQ(const vector<double> &state){
+
+  int bestAction = 0;
+  double bestVal = computeQ(state, 0);
+
+  int numTies = 0;
+
+  for(int a = 1; a < numActions; a++){
+
+    double val = computeQ(state, a);
+    if(fabs(val - bestVal) < EPS){
+
+      numTies++;
+      if(gsl_rng_uniform(ran) < (1.0 / (1.0 + numTies))){
+	bestVal = val;
+	bestAction = a;
+      }
+    }
+    else if(val > bestVal){
+      bestVal = val;
+      bestAction = a;
+      numTies = 0;
+    }
+  }
+
+  return bestAction;
+}
+
+
+double GreedyGQLambdaAgent::dot(vector<double> v1, vector<double> v2){
+
+    double sum = 0;
+
+    for(unsigned int i =0; i < v1.size(); i++){
+        sum += v1[i]*v2[i];
+    }
+
+    return sum;
+}
+
+int GreedyGQLambdaAgent::takeAction(const vector<double> &state){
+
+  if(diverged){
+    return (int)(gsl_rng_uniform(ran) * numActions) % numActions;
+  }
+
+  for(int a = 0; a < numActions; a++){
+    for(int f = 0; f < numFeatures; f++){
+
+      if(isinf(theta[a][f]) || (theta[a][f] != theta[a][f])){
+	diverged = true;
+	cout << "Diverged\n";
+      }
+
+    }
+  }
+
+  int action;
+  bool explore;
+
+  int bestAction = argMaxQ(state);
+  if(gsl_rng_uniform(ran) < epsilon){
+    action = (int)(gsl_rng_uniform(ran) * numActions) % numActions;
+    if(action != bestAction){
+      explore = true;
+    }
+  }
+  else{
+    action = bestAction;
+    explore = false;
+  }
+  
+  if(lastAction != -1){
+    
+
+    /*
+      double delta = lastReward + computeQ(state, action) - computeQ(lastState, lastAction);
+      
+      for(int a = 0; a < numActions; a++){
+      for(int f = 0; f < numFeatures; f++){
+      eligibility[a][f] *= lambda;
+      }
+      }
+      
+      for(int f = 0; f < numFeatures; f++){
+      
+      eligibility[lastAction][f] += lastState[f]; // Must be zero or one.
+      if(eligibility[lastAction][f] > 1.0){
+      eligibility[lastAction][f] = 1.0;
+      }
+      
+      }
+      
+      double denominator = 0;
+      for(int f = 0; f < numFeatures; f++){
+      denominator += lastState[f];
+      }
+      
+      for(int a = 0; a < numActions; a++){
+      for(int f = 0; f < numFeatures; f++){
+      weights[a][f] += alpha * delta * eligibility[a][f] * (1.0 / denominator);
+      }
+      }
+    */
+    
+
+    vector<double> phi = lastState;
+    vector<double> phi_next = state;
+    //lambda already set.
+    double gamma = 1.0;
+    double z = 0;
+    double r = lastReward;
+    //    double rho = (action == argMaxQ(state))? 1.0 - epsilon + (epsilon / numActions) : (epsilon / numActions);
+
+    double eta = 1.0;
+    double delta;
+
+    double denominator = 0;
+    for(int f = 0; f < numFeatures; f++){
+      denominator += lastState[f];
+    }
+
+    delta = r + (1-gamma)*z + gamma*dot(theta[action],phi_next) - dot(theta[lastAction],phi);
+    
+    double rho = 1.0;//(lastExplore)? epsilon : (1.0 - epsilon);
+    double I = 1.0;
+    
+
+    /*
+      for(int i = 0; i < numFeatures; i++){
+      e[a][i] = rho * e[a][i] + I * phi[i];
+      
+      if(e[a][i] > 1.0){
+      e[a][i] = 1.0;
+      }
+      }
+    */
+    
+    for(int i = 0; i < numFeatures; i++){
+      
+    double eligibility = phi[i];
+      theta[lastAction][i] += alpha * (delta * eligibility /** e[a][i]*/ - gamma * (1.0 - lambda) * dot(w[lastAction], e[lastAction]) * phi_next[i]) * (1.0 / denominator);
+      w[lastAction][i] += alpha * eta * (delta * eligibility /** e[a][i]*/ - dot(w[lastAction], phi) * phi[i]) * (1.0 / denominator);
+      //      e[a][i] *= gamma * lambda;
+    }
+    
+    if(numEpisodesDone == 3002){
+      cout << "w: " << w[0][5] << "\n";
+      cout << "theta: " << theta[0][5] << "\n";
+    }
+    
+  }
+  
+  for(int i = 0; i < numFeatures; i++){
+    lastState[i] = state[i];
+  }
+  
+  lastAction = action;
+  lastExplore = explore;
+  
+  return action;
+}
+
+int GreedyGQLambdaAgent::takeBestAction(const vector<double> &state){
+
+  if(diverged){
+    return (int)(gsl_rng_uniform(ran) * numActions) % numActions;
+  }
+
+  return (argMaxQ(state));
+}
+
+
+void GreedyGQLambdaAgent::update(const double &reward, const vector<double> &state, const bool &terminal){
+
+  if(diverged){
+    return;
+  }
+
+  lastReward = reward;
+
+  if(terminal){
+
+    /*
+    double delta = lastReward - computeQ(lastState, lastAction);
+
+    for(int a = 0; a < numActions; a++){
+      for(int f = 0; f < numFeatures; f++){
+	eligibility[a][f] *= lambda;
+      }
+    }
+    for(int f = 0; f < numFeatures; f++){
+
+      eligibility[lastAction][f] += lastState[f]; // Must be zero or one.
+      if(eligibility[lastAction][f] > 1.0){
+	eligibility[lastAction][f] = 1.0;
+      }
+
+    }
+
+    double denominator = 0;
+    for(int f = 0; f < numFeatures; f++){
+      denominator += lastState[f];
+    }
+
+    for(int a = 0; a < numActions; a++){
+      for(int f = 0; f < numFeatures; f++){
+	weights[a][f] += alpha * delta * eligibility[a][f] * (1.0 / denominator);
+      }
+    }
+    */
+
+    double denominator = 0;
+    for(int f = 0; f < numFeatures; f++){
+      denominator += lastState[f];
+    }
+
+    vector<double> phi = lastState;
+    vector<double> phi_next = state;
+    /////////////////
+    phi_next.resize(numFeatures, 0);
+    /////////////////
+    //lambda already set.
+    double gamma = 1.0;
+    double z = 0;
+    double r = lastReward;
+    //    double rho = (action == argMaxQ(state))? 1.0 - epsilon + (epsilon / numActions) : (epsilon / numActions);
+
+
+    double eta = 1.0;
+    double delta;
+
+    delta = r + (1-gamma)*z /*+ gamma*dot(theta[action],phi_next)*/ - dot(theta[lastAction],phi);
+    
+    double rho = 1.0;//(lastExplore)? epsilon : (1.0 - epsilon);
+    double I = 1.0;
+    
+    /*
+for(int i = 0; i < numFeatures; i++){
+      e[a][i] = rho * e[a][i] + I * phi[i];
+      
+      if(e[a][i] > 1.0){
+	e[a][i] = 1.0;
+      }
+    }
+    */
+
+    for(int i = 0; i < numFeatures; i++){
+      
+    double eligibility = phi[i];
+      theta[lastAction][i] += alpha * (delta * eligibility /** e[a][i]*/ - gamma * (1.0 - lambda) * dot(w[lastAction], e[lastAction]) * phi_next[i]) * (1.0 / denominator);
+      w[lastAction][i] += alpha * eta * (delta * eligibility /* * e[a][i]*/ - dot(w[lastAction], phi) * phi[i]) * (1.0 / denominator);
+      //      e[a][i] *= gamma * lambda;
+      
+      //	if(drand48() < 0.000001){
+      //	  cout << "w[" << a << "][" << i << "]: " << w[a][i] << "\n";
+      //	}
+    }
+    
+    resetEligibility();
+    
+    lastAction = -1;
+    lastExplore = false;
+
+    numEpisodesDone++;
+
+
+    // Anneal alpha and epsilon.
+    alpha = alphaInit / ((numEpisodesDone / 50000.0) + 1.0);
+    epsilon = 0.1 / ((numEpisodesDone / 50000.0) + 1.0);
+  }
+
+}
+
+vector<double> GreedyGQLambdaAgent::getWeights(){
+
+  vector<double> ww;
+  for(int a = 0; a < numActions; a++){
+    for(int f = 0; f < numFeatures; f++){
+      ww.push_back(theta[a][f]);
+    }
+  }
+
+  return ww;
+}
+

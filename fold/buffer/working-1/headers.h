@@ -1,0 +1,25 @@
+#ifndef HEADERS_H
+#define HEADERS_H
+
+#define DIR_NORTH 0
+#define DIR_EAST 1
+#define DIR_WEST 2
+#define DIR_SOUTH 3
+
+#define ACTION_NORTH 0
+#define ACTION_EAST 1
+
+#define DISPLAY_FEATURES 0
+#define DISPLAY_TERMINAL 1
+#define DISPLAY_REWARDS  2
+#define DISPLAY_MAXIMAL_VALUES  3
+#define DISPLAY_MINIMAL_VALUES  4
+#define DISPLAY_MAXIMAL_ACTIONS 5
+#define DISPLAY_MINIMAL_ACTIONS 6
+
+#define EPS 1.0e-6
+#define INF 1.0e32
+
+#define PI 3.1415926535897933
+
+#endif

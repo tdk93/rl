@@ -1,0 +1,6 @@
+
+ -- Sat Nov 18 21:46:25 2017
+ new_double(): calloc(-1073741824,8) failed
+
+ -- Sat Nov 18 21:46:25 2017
+ *** Exiting cmaes_t ***
