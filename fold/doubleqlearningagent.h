@@ -42,6 +42,8 @@ class DoubleQLearningAgent : public Agent{
   void resetEligibility();
 
   double computeQ(const vector<double> &state, const int &action, bool qVal);
+  
+  double computeQSpecial(const vector<double> &state, const int &action, bool qVal);
   int argMaxQ(const vector<double> &state, bool qVal);
   int argMaxQForBestAction(const vector<double> &state);
 

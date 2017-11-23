@@ -90,9 +90,8 @@ double DoubleQLearningAgent::computeQ(const vector<double> &state, const int &ac
 double DoubleQLearningAgent::computeQSpecial(const vector<double> &state, const int &action, bool qVal){
 
   double v = 0;
-  
   for(int f = 0; f < numFeatures; f++){
-    v += (weights[action][qVal][f] + weights[action][!qval][f]/2.0) * state[f];
+    v += (weights[action][qVal][f] + weights[action][~qVal][f]/2.0) * state[f];
   }
 
   return v;
@@ -122,7 +121,7 @@ int DoubleQLearningAgent::argMaxQForBestAction(const vector<double> &state){
 
   for(int a = 1; a < numActions; a++){
 
-    double val = (computeQSpecial(state, a, 0);//+computeQ(state,a,1))/2.0;
+    double val = computeQSpecial(state, a, 0);//+computeQ(state,a,1))/2.0;
     if(fabs(val - bestVal) < EPS){
 
       numTies++;
